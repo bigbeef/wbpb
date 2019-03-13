@@ -1,5 +1,6 @@
 package com.cppba.wbpd.util;
 
+import com.cppba.wbpd.bean.LoginCache;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
@@ -19,16 +20,13 @@ import static java.net.HttpURLConnection.HTTP_OK;
 @Slf4j
 public class WbpdUtils {
 
-    private static String username = "pb";
-    private static String password = "BRo62INvQp8ws0fN";
-
     private final static Long EXPIRE_MINUTE = 30L;
 
     private final static String LOGIN_URL = "https://login.sina.com.cn/sso/login.php";
     public final static String UPLOAD_URL = "http://picupload.service.weibo.com/interface/pic_upload.php";
 
     // 缓存登录信息
-    private static Map<String, Object> loginCache = new HashMap<>();
+    private static Map<String, LoginCache> loginCache = new HashMap<>();
 
     ////////////////////////////////////////////////////////////////////
     /////////// 上传相关
@@ -58,10 +56,10 @@ public class WbpdUtils {
      *
      * @return
      */
-    public static Map<String, String> buildUploadHeader() {
+    public static Map<String, String> buildUploadHeader(String username) {
         Map<String, String> header = new HashMap<>();
         header.put("Host", "picupload.service.weibo.com");
-        header.put("Cookie", (String) loginCache.get("cookie"));
+        header.put("Cookie", loginCache.get(username).getCookie());
         header.put("Origin", "https://weibo.com/");
         header.put("Referer", "https://weibo.com/");
         return header;
@@ -76,20 +74,20 @@ public class WbpdUtils {
     /////////// 登录相关
     ////////////////////////////////////////////////////////////////////
 
-    public static void checkLogin() throws Exception {
-        if (loginCache.get("cookie") == null) {
-            login();
+    public static void checkLogin(String username, String password) throws Exception {
+        if (loginCache.get(username) == null) {
+            login(username, password);
         } else {
             // 是否过期
-            Long expireTime = (Long) loginCache.get("expireTime");
-            if (expireTime < System.currentTimeMillis()) {
-                login();
+            LoginCache loginCache = WbpdUtils.loginCache.get(username);
+            if (loginCache.getExpireTime() < System.currentTimeMillis()) {
+                login(username, password);
             }
         }
     }
 
-    private static void login() throws Exception {
-        HttpUtils.HttpResponse httpResponse = HttpUtils.doPost(LOGIN_URL, buildLoginHeader(), buildLoginParam());
+    private static void login(String username, String password) throws Exception {
+        HttpUtils.HttpResponse httpResponse = HttpUtils.doPost(LOGIN_URL, buildLoginHeader(), buildLoginParam(username, password));
         if (httpResponse.getStatusCode() == HTTP_OK) {
 
             String cookie = httpResponse.getHeader().get("set-cookie");
@@ -106,8 +104,8 @@ public class WbpdUtils {
             log.debug("登陆成功,cookie:--->\n\n" + cookie + "\n");
             log.debug("登陆成功！获取cookie成功!");
             // 存入cookie
-            loginCache.put("cookie", cookie);
-            loginCache.put("expireTime", TimeUnit.MINUTES.toMillis(EXPIRE_MINUTE) + System.currentTimeMillis());
+            LoginCache loginCache = new LoginCache(TimeUnit.MINUTES.toMillis(EXPIRE_MINUTE) + System.currentTimeMillis(), cookie);
+            WbpdUtils.loginCache.put(username, loginCache);
         } else {
             throw new Exception("登录失败，原因: " + httpResponse.getBody());
         }
@@ -118,7 +116,7 @@ public class WbpdUtils {
      *
      * @return
      */
-    private static Map<String, String> buildLoginParam() {
+    private static Map<String, String> buildLoginParam(String username, String password) {
         Map<String, String> params = new HashMap<>();
         params.put("client", "ssologin.js(v1.4.15)");
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
