@@ -38,8 +38,6 @@ public class WbpdClient {
         if (httpResponse.getStatusCode() != HTTP_OK) {
             log.error("上传失败");
         }
-        log.info(httpResponse.toString());
-
         String bodyJson = WbpdUtils.parseBodyJson(httpResponse.getBody());
         return JsonUtils.jsonToBean(bodyJson, UploadResponse.class);
     }
